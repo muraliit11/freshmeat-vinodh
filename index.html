@@ -592,9 +592,8 @@
   const db = getFirestore(app);
 
   // ---- Per-customer settings: change these two lines for each new shop ----
-  // TESTING: admin is Murali-Jio (9361740624). Once tested, change to
-  // Vinodh's number: "+919566153147".
-  const ADMIN_PHONE = "+919566153147";
+  const ADMIN_PHONE = "+919566153147";   // shop owner (Vinodh)
+  const SUPPORT_PHONE = "+919361740624"; // developer/support (Murali-Jio) — same on every shop, for testing & fixes
   const SHOP_ID = "vinodh"; // unique per customer deployment — every shop must have its own
   // One-time seed: if this shop has no catalog yet, copy products (with photos)
   // from this shop's catalog so the owner doesn't start from scratch.
@@ -602,16 +601,20 @@
   window.SHOP_ID = SHOP_ID; // exposed for freshmeat-paywall.js so trials are scoped per shop
 
   // ---- Admin login by OTP to the shop owner's registered mobile ----
-  window.ADMIN_PHONE_MASKED = ADMIN_PHONE.slice(0, 3) + " •••••• " + ADMIN_PHONE.slice(-4);
+  const ADMIN_PHONES = { owner: ADMIN_PHONE, support: SUPPORT_PHONE };
+  const maskPhone = (p) => p.slice(0, 3) + " •••••• " + p.slice(-4);
+  window.ADMIN_PHONE_MASKED = maskPhone(ADMIN_PHONE);
+  window.SUPPORT_PHONE_MASKED = maskPhone(SUPPORT_PHONE);
   let adminVerifier = null;
   let adminConfirmation = null;
 
-  window.adminSendOtp = async function () {
+  window.adminSendOtp = async function (who) {
+    const phone = ADMIN_PHONES[who] || ADMIN_PHONE;
     try {
       if (!adminVerifier) {
         adminVerifier = new RecaptchaVerifier(auth, "admin-recaptcha", { size: "invisible" });
       }
-      adminConfirmation = await signInWithPhoneNumber(auth, ADMIN_PHONE, adminVerifier);
+      adminConfirmation = await signInWithPhoneNumber(auth, phone, adminVerifier);
     } catch (err) {
       // reCAPTCHA can't be reused after a failure — rebuild it on the next try
       try { adminVerifier && adminVerifier.clear(); } catch (e) {}
@@ -623,8 +626,8 @@
   window.adminVerifyOtp = async function (code) {
     if (!adminConfirmation) throw new Error("no-otp-sent");
     const cred = await adminConfirmation.confirm(code);
-    // Only the shop's registered mobile can unlock admin
-    if (cred.user.phoneNumber !== ADMIN_PHONE) {
+    // Only the shop owner's or support mobile can unlock admin
+    if (cred.user.phoneNumber !== ADMIN_PHONE && cred.user.phoneNumber !== SUPPORT_PHONE) {
       await signOut(auth);
       throw new Error("not-admin");
     }
@@ -738,9 +741,10 @@
 <div class="admin-modal" id="admin-modal">
   <div class="admin-box" id="admin-step-send">
     <h3>Admin login</h3>
-    <div class="otp-note">We'll send a one-time code (OTP) by SMS to the shop's registered mobile <strong id="admin-phone-mask"></strong>.</div>
+    <div class="otp-note">We'll send a one-time code (OTP) by SMS to the registered mobile you choose.</div>
     <div class="admin-error" id="admin-send-error"></div>
-    <button class="done-btn" id="admin-send-btn" onclick="sendAdminOtp()">Send OTP</button>
+    <button class="done-btn admin-send-btn" onclick="sendAdminOtp('owner', this)">Send OTP to shop owner<br><span style="font-weight:400; font-size:12px;" id="admin-phone-mask"></span></button>
+    <button class="done-btn admin-send-btn" onclick="sendAdminOtp('support', this)" style="background:#fff; color:var(--accent); border:1px solid var(--accent);">Send OTP to support<br><span style="font-weight:400; font-size:12px;" id="support-phone-mask"></span></button>
     <button class="cancel-btn" onclick="closeAdminModal()">Cancel</button>
   </div>
   <div class="admin-box" id="admin-step-verify" style="display:none;">
@@ -953,7 +957,7 @@
     }
     const mask = window.ADMIN_PHONE_MASKED || "";
     document.getElementById("admin-phone-mask").textContent = mask;
-    document.getElementById("admin-phone-mask-2").textContent = mask;
+    document.getElementById("support-phone-mask").textContent = window.SUPPORT_PHONE_MASKED || "";
     showAdminStep("send");
     document.getElementById("admin-modal").classList.add("open");
   }
@@ -971,12 +975,15 @@
     document.getElementById("admin-modal").classList.remove("open");
   }
 
-  async function sendAdminOtp() {
-    const btn = document.getElementById("admin-send-btn");
-    btn.disabled = true;
+  async function sendAdminOtp(who, btn) {
+    const buttons = document.querySelectorAll(".admin-send-btn");
+    const originalHtml = btn.innerHTML;
+    buttons.forEach((b) => (b.disabled = true));
     btn.textContent = "Sending…";
     try {
-      await window.adminSendOtp();
+      await window.adminSendOtp(who);
+      document.getElementById("admin-phone-mask-2").textContent =
+        who === "support" ? window.SUPPORT_PHONE_MASKED : window.ADMIN_PHONE_MASKED;
       showAdminStep("verify");
     } catch (err) {
       console.error(err);
@@ -985,8 +992,8 @@
           ? "Too many attempts. Please try again later."
           : "Couldn't send OTP. Check connection and try again.";
     } finally {
-      btn.disabled = false;
-      btn.textContent = "Send OTP";
+      buttons.forEach((b) => (b.disabled = false));
+      btn.innerHTML = originalHtml;
     }
   }
 
@@ -1012,7 +1019,7 @@
     } catch (err) {
       console.error(err);
       document.getElementById("admin-error").textContent =
-        err && err.message === "not-admin" ? "This number isn't the shop's admin." : "Wrong OTP. Try again.";
+        err && err.message === "not-admin" ? "This number isn't registered as admin." : "Wrong OTP. Try again.";
     } finally {
       btn.disabled = false;
     }
