@@ -575,7 +575,7 @@
 </style>
  <script type="module">
   import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
-  import { getAuth, signInWithEmailAndPassword, sendPasswordResetEmail } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
+  import { getAuth, RecaptchaVerifier, signInWithPhoneNumber, signOut } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
   import { getFirestore, doc, getDoc, setDoc } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
 
   const firebaseConfig = {
@@ -591,25 +591,67 @@
   const auth = getAuth(app);
   const db = getFirestore(app);
 
-  const ADMIN_EMAIL = "muraliitjio11@gmail.com";
-  const SHOP_ID = "customer2"; // unique per customer deployment — change this for future customers
+  // ---- Per-customer settings: change these two lines for each new shop ----
+  // TESTING: admin is Murali-Jio (9361740624). Once tested, change to
+  // Vinodh's number: "+919566153147".
+  const ADMIN_PHONE = "+919361740624";
+  const SHOP_ID = "vinodh"; // unique per customer deployment — every shop must have its own
+  // One-time seed: if this shop has no catalog yet, copy products (with photos)
+  // from this shop's catalog so the owner doesn't start from scratch.
+  const SEED_FROM_SHOP_ID = "customer2";
   window.SHOP_ID = SHOP_ID; // exposed for freshmeat-paywall.js so trials are scoped per shop
 
-  window.firebaseAdminSignIn = async function (enteredPassword) {
-    return signInWithEmailAndPassword(auth, ADMIN_EMAIL, enteredPassword);
+  // ---- Admin login by OTP to the shop owner's registered mobile ----
+  window.ADMIN_PHONE_MASKED = ADMIN_PHONE.slice(0, 3) + " •••••• " + ADMIN_PHONE.slice(-4);
+  let adminVerifier = null;
+  let adminConfirmation = null;
+
+  window.adminSendOtp = async function () {
+    try {
+      if (!adminVerifier) {
+        adminVerifier = new RecaptchaVerifier(auth, "admin-recaptcha", { size: "invisible" });
+      }
+      adminConfirmation = await signInWithPhoneNumber(auth, ADMIN_PHONE, adminVerifier);
+    } catch (err) {
+      // reCAPTCHA can't be reused after a failure — rebuild it on the next try
+      try { adminVerifier && adminVerifier.clear(); } catch (e) {}
+      adminVerifier = null;
+      throw err;
+    }
   };
 
-  window.firebaseSendPasswordReset = async function () {
-    return sendPasswordResetEmail(auth, ADMIN_EMAIL);
+  window.adminVerifyOtp = async function (code) {
+    if (!adminConfirmation) throw new Error("no-otp-sent");
+    const cred = await adminConfirmation.confirm(code);
+    // Only the shop's registered mobile can unlock admin
+    if (cred.user.phoneNumber !== ADMIN_PHONE) {
+      await signOut(auth);
+      throw new Error("not-admin");
+    }
   };
 
-  window.ADMIN_EMAIL_DISPLAY = ADMIN_EMAIL;
+  window.adminSignOut = async function () {
+    try { await signOut(auth); } catch (e) {}
+  };
 
   // ---- Shared product catalog (Firestore-backed — every visitor sees the same live prices) ----
   window.fetchSharedProducts = async function () {
     const ref = doc(db, "shopProducts", SHOP_ID);
     const snap = await getDoc(ref);
-    return snap.exists() ? snap.data() : null;
+    if (snap.exists()) return snap.data();
+    if (SEED_FROM_SHOP_ID && SEED_FROM_SHOP_ID !== SHOP_ID) {
+      const seedSnap = await getDoc(doc(db, "shopProducts", SEED_FROM_SHOP_ID));
+      if (seedSnap.exists()) {
+        const data = seedSnap.data();
+        try {
+          await setDoc(ref, { products: data.products, nextAddedAt: data.nextAddedAt, updatedAt: Date.now() });
+        } catch (e) {
+          console.warn("Could not save seeded catalog for this shop yet:", e);
+        }
+        return data;
+      }
+    }
+    return null;
   };
 
   window.saveSharedProducts = async function (productsArray, nextAddedAtValue) {
@@ -694,32 +736,23 @@
 </div>
 
 <div class="admin-modal" id="admin-modal">
-  <div class="admin-box">
-    <h3>Enter admin password</h3>
-    <div class="password-field">
-      <input type="password" class="admin-input" id="admin-password-input" placeholder="Password" />
-      <button type="button" class="eye-toggle" onclick="togglePasswordVisibility('admin-password-input', this)">👁️</button>
-    </div>
-    <div class="admin-error" id="admin-error"></div>
-    <button class="done-btn" onclick="submitAdminPassword()">Unlock</button>
+  <div class="admin-box" id="admin-step-send">
+    <h3>Admin login</h3>
+    <div class="otp-note">We'll send a one-time code (OTP) by SMS to the shop's registered mobile <strong id="admin-phone-mask"></strong>.</div>
+    <div class="admin-error" id="admin-send-error"></div>
+    <button class="done-btn" id="admin-send-btn" onclick="sendAdminOtp()">Send OTP</button>
     <button class="cancel-btn" onclick="closeAdminModal()">Cancel</button>
-    <button class="forgot-link" onclick="startPasswordReset()">Forgot password? Reset via email</button>
   </div>
-</div>
-
-<div class="admin-modal" id="reset-modal">
-  <div class="admin-box" id="reset-step-confirm">
-    <h3>Reset admin password</h3>
-    <div class="reset-note">We'll send a password reset link to the admin email on file (<span id="reset-email-mask"></span>). Open it on this device to set a new password, then come back and unlock with it.</div>
-    <div class="admin-error" id="reset-error"></div>
-    <button class="done-btn" onclick="sendPasswordReset()">Send reset email</button>
-    <button class="cancel-btn" onclick="closeResetModal()">Cancel</button>
+  <div class="admin-box" id="admin-step-verify" style="display:none;">
+    <h3>Enter OTP</h3>
+    <div class="otp-note">Enter the 6-digit code sent to <strong id="admin-phone-mask-2"></strong>.</div>
+    <input type="text" inputmode="numeric" maxlength="6" class="admin-input" id="admin-otp-input" placeholder="6-digit OTP" />
+    <div class="admin-error" id="admin-error"></div>
+    <button class="done-btn" id="admin-verify-btn" onclick="verifyAdminOtp()">Unlock</button>
+    <button class="cancel-btn" onclick="closeAdminModal()">Cancel</button>
+    <button class="forgot-link" onclick="showAdminStep('send')">Didn't get it? Resend OTP</button>
   </div>
-  <div class="admin-box" id="reset-step-sent" style="display:none;">
-    <h3>Check your email</h3>
-    <div class="reset-note">A reset link was sent to <span id="reset-email-sent"></span>. Follow it to set a new password, then unlock Admin here with the new one.</div>
-    <button class="done-btn" onclick="closeResetModal()">Done</button>
-  </div>
+  <div id="admin-recaptcha"></div>
 </div>
 
 <div class="admin-modal" id="invoice-reset-modal">
@@ -733,10 +766,7 @@
       <input type="checkbox" id="reset-backup-confirm" />
       <span>I have taken a backup and understand this cannot be undone.</span>
     </label>
-    <div class="password-field">
-      <input type="password" class="admin-input" id="reset-confirm-password" placeholder="Re-enter admin password" />
-      <button type="button" class="eye-toggle" onclick="togglePasswordVisibility('reset-confirm-password', this)">👁️</button>
-    </div>
+    <input type="text" class="admin-input" id="reset-confirm-word" placeholder="Type RESET to confirm" autocomplete="off" />
     <div class="admin-error" id="invoice-reset-error"></div>
     <button class="done-btn" onclick="confirmInvoiceReset()" style="background:var(--accent);">Reset Invoice Data</button>
     <button class="cancel-btn" onclick="closeInvoiceResetModal()">Cancel</button>
@@ -917,23 +947,59 @@
       document.getElementById("export-btn").style.display = "none";
       document.getElementById("restore-btn").style.display = "none";
       document.getElementById("reset-invoice-btn").style.display = "none";
+      if (window.adminSignOut) window.adminSignOut();
       renderGrid();
       return;
     }
-    document.getElementById("admin-password-input").value = "";
-    document.getElementById("admin-error").textContent = "";
+    const mask = window.ADMIN_PHONE_MASKED || "";
+    document.getElementById("admin-phone-mask").textContent = mask;
+    document.getElementById("admin-phone-mask-2").textContent = mask;
+    showAdminStep("send");
     document.getElementById("admin-modal").classList.add("open");
-    document.getElementById("admin-password-input").focus();
+  }
+
+  function showAdminStep(step) {
+    document.getElementById("admin-send-error").textContent = "";
+    document.getElementById("admin-error").textContent = "";
+    document.getElementById("admin-otp-input").value = "";
+    document.getElementById("admin-step-send").style.display = step === "send" ? "block" : "none";
+    document.getElementById("admin-step-verify").style.display = step === "verify" ? "block" : "none";
+    if (step === "verify") document.getElementById("admin-otp-input").focus();
   }
 
   function closeAdminModal() {
     document.getElementById("admin-modal").classList.remove("open");
   }
 
-  async function submitAdminPassword() {
-    const entered = document.getElementById("admin-password-input").value;
+  async function sendAdminOtp() {
+    const btn = document.getElementById("admin-send-btn");
+    btn.disabled = true;
+    btn.textContent = "Sending…";
     try {
-      await window.firebaseAdminSignIn(entered);
+      await window.adminSendOtp();
+      showAdminStep("verify");
+    } catch (err) {
+      console.error(err);
+      document.getElementById("admin-send-error").textContent =
+        err && err.code === "auth/too-many-requests"
+          ? "Too many attempts. Please try again later."
+          : "Couldn't send OTP. Check connection and try again.";
+    } finally {
+      btn.disabled = false;
+      btn.textContent = "Send OTP";
+    }
+  }
+
+  async function verifyAdminOtp() {
+    const code = document.getElementById("admin-otp-input").value.trim();
+    if (!/^\d{6}$/.test(code)) {
+      document.getElementById("admin-error").textContent = "Enter the 6-digit OTP.";
+      return;
+    }
+    const btn = document.getElementById("admin-verify-btn");
+    btn.disabled = true;
+    try {
+      await window.adminVerifyOtp(code);
       adminUnlocked = true;
       document.getElementById("admin-btn").textContent = "🔓 Admin";
       document.getElementById("admin-btn").classList.add("unlocked");
@@ -942,53 +1008,20 @@
       document.getElementById("reset-invoice-btn").style.display = "inline-block";
       renderGrid();
       closeAdminModal();
+      showToast("Admin unlocked.");
     } catch (err) {
-      document.getElementById("admin-error").textContent = "Incorrect password. Try again.";
+      console.error(err);
+      document.getElementById("admin-error").textContent =
+        err && err.message === "not-admin" ? "This number isn't the shop's admin." : "Wrong OTP. Try again.";
+    } finally {
+      btn.disabled = false;
     }
   }
 
-  // --- Show/hide password toggle (used on admin login field) ---
-  function togglePasswordVisibility(inputId, btn) {
-    const input = document.getElementById(inputId);
-    if (input.type === "password") {
-      input.type = "text";
-      btn.textContent = "🙈";
-    } else {
-      input.type = "password";
-      btn.textContent = "👁️";
-    }
-  }
-
-  // --- Forgot password: real Firebase email reset link ---
-  function startPasswordReset() {
-    closeAdminModal();
-    const email = window.ADMIN_EMAIL_DISPLAY || "";
-    document.getElementById("reset-email-mask").textContent = email;
-    document.getElementById("reset-error").textContent = "";
-    document.getElementById("reset-step-confirm").style.display = "block";
-    document.getElementById("reset-step-sent").style.display = "none";
-    document.getElementById("reset-modal").classList.add("open");
-  }
-
-  function closeResetModal() {
-    document.getElementById("reset-modal").classList.remove("open");
-  }
-
-  async function sendPasswordReset() {
-    try {
-      await window.firebaseSendPasswordReset();
-      document.getElementById("reset-email-sent").textContent = window.ADMIN_EMAIL_DISPLAY || "";
-      document.getElementById("reset-step-confirm").style.display = "none";
-      document.getElementById("reset-step-sent").style.display = "block";
-    } catch (err) {
-      document.getElementById("reset-error").textContent = "Couldn't send reset email. Try again shortly.";
-    }
-  }
-
-  // --- Invoice/bill-history reset (double-confirm: backup checkbox + re-entered password) ---
+  // --- Invoice/bill-history reset (double-confirm: backup checkbox + typing RESET) ---
   function openInvoiceResetModal() {
     document.getElementById("reset-backup-confirm").checked = false;
-    document.getElementById("reset-confirm-password").value = "";
+    document.getElementById("reset-confirm-word").value = "";
     document.getElementById("invoice-reset-error").textContent = "";
     document.getElementById("invoice-reset-modal").classList.add("open");
   }
@@ -997,29 +1030,28 @@
     document.getElementById("invoice-reset-modal").classList.remove("open");
   }
 
-  async function confirmInvoiceReset() {
+  function confirmInvoiceReset() {
     const backedUp = document.getElementById("reset-backup-confirm").checked;
-    const entered = document.getElementById("reset-confirm-password").value;
+    const word = document.getElementById("reset-confirm-word").value.trim().toUpperCase();
+    if (!adminUnlocked) {
+      document.getElementById("invoice-reset-error").textContent = "Unlock Admin first.";
+      return;
+    }
     if (!backedUp) {
       document.getElementById("invoice-reset-error").textContent = "Please confirm you've taken a backup first.";
       return;
     }
-    if (!entered) {
-      document.getElementById("invoice-reset-error").textContent = "Please re-enter your admin password.";
+    if (word !== "RESET") {
+      document.getElementById("invoice-reset-error").textContent = "Type RESET to confirm.";
       return;
     }
-    try {
-      await window.firebaseAdminSignIn(entered);
-      billHistory = [];
-      invoiceCounter = 1;
-      currentInvoice = null;
-      saveState();
-      renderDrawer();
-      closeInvoiceResetModal();
-      showToast("Invoice history reset. Numbering restarts at 001.");
-    } catch (err) {
-      document.getElementById("invoice-reset-error").textContent = "Incorrect password.";
-    }
+    billHistory = [];
+    invoiceCounter = 1;
+    currentInvoice = null;
+    saveState();
+    renderDrawer();
+    closeInvoiceResetModal();
+    showToast("Invoice history reset. Numbering restarts at 001.");
   }
 
   function showToast(msg) {
@@ -1620,8 +1652,8 @@
 
   init();
 
-  document.getElementById("admin-password-input").addEventListener("keydown", (e) => {
-    if (e.key === "Enter") submitAdminPassword();
+  document.getElementById("admin-otp-input").addEventListener("keydown", (e) => {
+    if (e.key === "Enter") verifyAdminOtp();
   });
   document.getElementById("new-item-price").addEventListener("keydown", (e) => {
     if (e.key === "Enter") submitNewItem();
