@@ -1,0 +1,1634 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<title>FreshMeat Shop</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<script src="https://checkout.razorpay.com/v1/checkout.js"></script>
+<style>
+  :root {
+    --bg: #F7F1EA;
+    --card: #FCFAF6;
+    --border: #E4D8C8;
+    --ink: #2A1B14;
+    --muted: #8A6F5C;
+    --accent: #7A2323;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--ink);
+    font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  }
+  .header {
+    border-bottom: 1px solid var(--border);
+    background: var(--card);
+  }
+  .header-inner {
+    max-width: 1040px;
+    margin: 0 auto;
+    padding: 18px 24px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+  }
+  .logo { display: flex; align-items: baseline; gap: 8px; }
+  .logo span.name { font-size: 20px; font-weight: 700; }
+  .logo span.tag { font-size: 13px; color: var(--muted); margin-left: 4px; }
+  .cart-pill {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 999px;
+    padding: 8px 16px;
+    font-weight: 600;
+    cursor: pointer;
+  }
+  .cart-pill:hover { background: #f3ece2; }
+  .admin-btn {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 999px;
+    padding: 8px 14px;
+    font-weight: 600;
+    cursor: pointer;
+    font-size: 14px;
+    margin-right: 10px;
+  }
+  .admin-btn:hover { background: #f3ece2; }
+  .admin-btn.unlocked { background: #7A2323; color: #fff; border-color: #7A2323; }
+  .cart-badge {
+    background: var(--accent);
+    color: #fff;
+    border-radius: 999px;
+    font-size: 12px;
+    font-weight: 700;
+    padding: 2px 8px;
+    display: none;
+  }
+  .hero { max-width: 1040px; margin: 0 auto; padding: 32px 24px 8px; }
+  .hero h1 { font-size: 30px; font-weight: 800; margin: 0 0 6px; }
+  .hero p { color: var(--muted); margin: 0; font-size: 15px; }
+  .grid {
+    max-width: 1040px;
+    margin: 0 auto;
+    padding: 24px;
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+    gap: 16px;
+  }
+  .card {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 14px;
+    padding: 20px;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+  }
+  .emoji { font-size: 34px; }
+  .name { font-weight: 700; font-size: 16px; }
+  .unit { color: var(--muted); font-size: 13px; }
+  .price { font-weight: 800; font-size: 18px; color: var(--accent); display: flex; align-items: center; gap: 8px; }
+  .price-input {
+    width: 80px;
+    font-weight: 800;
+    font-size: 16px;
+    color: var(--accent);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 3px 6px;
+  }
+  .name-input {
+    width: 100%;
+    font-weight: 700;
+    font-size: 15px;
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 3px 6px;
+    box-sizing: border-box;
+    margin-bottom: 4px;
+  }
+  .emoji-input {
+    width: 56px;
+    font-size: 28px;
+    text-align: center;
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 2px;
+  }
+  .unit-input {
+    width: 100%;
+    font-size: 12px;
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 3px 6px;
+    box-sizing: border-box;
+    color: var(--muted);
+  }
+  .edit-icon {
+    font-size: 13px;
+    cursor: pointer;
+    color: var(--muted);
+    background: #fff;
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 2px 6px;
+  }
+  .edit-icon:hover { background: #f3ece2; }
+  /* Product photos (optional — emoji is shown when a product has no photo) */
+  .product-img { width: 56px; height: 56px; object-fit: contain; border-radius: 8px; background: #fff; display: block; }
+  .line-img { width: 28px; height: 28px; object-fit: contain; border-radius: 4px; display: block; }
+  .photo-row { display: flex; gap: 6px; align-items: center; flex-wrap: wrap; }
+  .add-btn {
+    background: var(--accent);
+    color: #fff;
+    border: none;
+    border-radius: 10px;
+    padding: 10px 0;
+    font-weight: 700;
+    font-size: 14px;
+    cursor: pointer;
+  }
+  .add-btn:hover { opacity: 0.92; }
+  .stepper {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 4px 8px;
+  }
+  .step-btn {
+    width: 32px;
+    height: 32px;
+    border-radius: 8px;
+    border: 1px solid var(--border);
+    background: #fff;
+    font-weight: 700;
+    cursor: pointer;
+    font-size: 16px;
+  }
+  .step-btn:hover { background: #f3ece2; }
+  .qty { font-weight: 700; }
+
+  .overlay {
+    position: fixed;
+    inset: 0;
+    background: rgba(42,27,20,0.45);
+    display: none;
+    z-index: 40;
+  }
+  .overlay.open { display: block; }
+  .drawer {
+    position: fixed;
+    top: 0;
+    right: 0;
+    height: 100%;
+    width: 380px;
+    max-width: 92vw;
+    background: var(--bg);
+    z-index: 50;
+    transform: translateX(100%);
+    transition: transform 0.25s ease;
+    display: flex;
+    flex-direction: column;
+    border-left: 1px solid var(--border);
+  }
+  .drawer.open { transform: translateX(0); }
+  .drawer-head {
+    padding: 18px 20px;
+    border-bottom: 1px solid var(--border);
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    background: var(--card);
+  }
+  .drawer-head h2 { margin: 0; font-size: 18px; }
+  .close-btn {
+    border: none;
+    background: none;
+    font-size: 20px;
+    cursor: pointer;
+    color: var(--muted);
+  }
+  .drawer-body { flex: 1; overflow-y: auto; padding: 16px 20px; }
+  .empty-cart { color: var(--muted); font-size: 14px; text-align: center; margin-top: 40px; }
+  .line-item {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 10px 0;
+    border-bottom: 1px solid var(--border);
+  }
+  .line-emoji { font-size: 22px; }
+  .line-info { flex: 1; }
+  .line-name { font-weight: 600; font-size: 14px; }
+  .line-sub { color: var(--muted); font-size: 12px; }
+  .line-total { font-weight: 700; font-size: 14px; min-width: 56px; text-align: right; }
+  .drawer-foot {
+    padding: 18px 20px;
+    border-top: 1px solid var(--border);
+    background: var(--card);
+  }
+  .total-row {
+    display: flex;
+    justify-content: space-between;
+    font-weight: 800;
+    font-size: 17px;
+    margin-bottom: 14px;
+  }
+  .bill-meta {
+    background: #fff;
+    border: 1px dashed var(--border);
+    border-radius: 8px;
+    padding: 8px 12px;
+    font-size: 12px;
+    color: var(--muted);
+    margin-bottom: 12px;
+  }
+  .bill-meta .shop-name {
+    font-size: 14px;
+    font-weight: 800;
+    color: var(--ink);
+    text-align: center;
+    padding: 2px 0 2px;
+  }
+  .bill-meta .shop-address {
+    font-size: 11px;
+    color: var(--muted);
+    text-align: center;
+    line-height: 1.4;
+    padding: 0 0 6px;
+    border-bottom: 1px dashed var(--border);
+    margin-bottom: 6px;
+  }
+  .bill-meta .row {
+    display: flex;
+    justify-content: space-between;
+    padding: 1px 0;
+  }
+  .bill-meta .row span:last-child { color: var(--ink); font-weight: 600; }
+  /* Printable invoice: hidden on screen, shown only in the print dialog
+     (which also offers "Save as PDF" when no printer is connected). */
+  #print-invoice { display: none; }
+  @media print {
+    body > *:not(#print-invoice) { display: none !important; }
+    #print-invoice {
+      display: block !important;
+      position: static;
+      width: 100%;
+      padding: 24px;
+      font-family: Arial, sans-serif;
+      color: #000;
+    }
+    #print-invoice h2 { text-align: center; margin: 0 0 4px; }
+    #print-invoice .pi-address { text-align: center; font-size: 12px; margin-bottom: 12px; }
+    #print-invoice .pi-row { display: flex; justify-content: space-between; font-size: 13px; margin: 2px 0; }
+    #print-invoice table { width: 100%; border-collapse: collapse; margin-top: 12px; }
+    #print-invoice th, #print-invoice td { border-bottom: 1px solid #ccc; text-align: left; padding: 4px 6px; font-size: 13px; }
+    #print-invoice th:last-child, #print-invoice td:last-child { text-align: right; }
+    #print-invoice .pi-total { text-align: right; font-weight: 700; font-size: 15px; margin-top: 10px; }
+  }
+  .history-link {
+    width: 100%;
+    background: none;
+    border: none;
+    color: var(--muted);
+    font-size: 12px;
+    text-decoration: underline;
+    cursor: pointer;
+    margin-top: 8px;
+  }
+  .history-modal {
+    position: fixed;
+    inset: 0;
+    background: rgba(42,27,20,0.55);
+    display: none;
+    align-items: center;
+    justify-content: center;
+    z-index: 65;
+  }
+  .history-modal.open { display: flex; }
+  .history-box {
+    background: var(--card);
+    border-radius: 16px;
+    padding: 22px;
+    width: 360px;
+    max-width: 90vw;
+    max-height: 70vh;
+    display: flex;
+    flex-direction: column;
+  }
+  .history-box h3 { margin: 0 0 4px; font-size: 17px; }
+  .history-note { font-size: 11px; color: var(--muted); margin-bottom: 12px; }
+  .history-list { overflow-y: auto; flex: 1; }
+  .history-item {
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 10px 12px;
+    margin-bottom: 8px;
+    font-size: 13px;
+  }
+  .history-item .h-top {
+    display: flex;
+    justify-content: space-between;
+    font-weight: 700;
+    margin-bottom: 2px;
+  }
+  .history-item .h-sub { color: var(--muted); font-size: 11px; }
+  .history-empty { color: var(--muted); font-size: 13px; text-align: center; margin-top: 20px; }
+  .pay-btn {
+    width: 100%;
+    background: var(--accent);
+    color: #fff;
+    border: none;
+    border-radius: 10px;
+    padding: 12px 0;
+    font-weight: 700;
+    font-size: 15px;
+    cursor: pointer;
+  }
+  .pay-btn:disabled { background: #cbb9ac; cursor: not-allowed; }
+
+  .pay-modal {
+    position: fixed;
+    inset: 0;
+    background: rgba(42,27,20,0.55);
+    display: none;
+    align-items: center;
+    justify-content: center;
+    z-index: 60;
+  }
+  .pay-modal.open { display: flex; }
+  .pay-box {
+    background: var(--card);
+    border-radius: 16px;
+    padding: 28px;
+    width: 320px;
+    max-width: 90vw;
+    text-align: center;
+  }
+  .pay-box h3 { margin: 0 0 4px; font-size: 18px; }
+  .pay-amount { font-size: 26px; font-weight: 800; color: var(--accent); margin: 6px 0 16px; }
+  #qr-holder {
+    display: flex;
+    justify-content: center;
+    margin-bottom: 14px;
+  }
+  .payee { font-weight: 600; font-size: 14px; margin-bottom: 2px; }
+  .pay-invoice-line { font-size: 11px; color: var(--muted); margin-bottom: 10px; }
+  .upi-row {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    font-size: 13px;
+    color: var(--muted);
+    margin-bottom: 4px;
+  }
+  .copy-btn {
+    border: 1px solid var(--border);
+    background: #fff;
+    border-radius: 6px;
+    font-size: 12px;
+    padding: 2px 8px;
+    cursor: pointer;
+  }
+  .bank-line { font-size: 12px; color: var(--muted); margin-bottom: 18px; }
+  .done-btn {
+    width: 100%;
+    background: var(--accent);
+    color: #fff;
+    border: none;
+    border-radius: 10px;
+    padding: 10px 0;
+    font-weight: 700;
+    cursor: pointer;
+    margin-bottom: 8px;
+  }
+  .cancel-btn {
+    width: 100%;
+    background: none;
+    border: none;
+    color: var(--muted);
+    font-size: 13px;
+    cursor: pointer;
+  }
+  .admin-modal {
+    position: fixed;
+    inset: 0;
+    background: rgba(42,27,20,0.55);
+    display: none;
+    align-items: center;
+    justify-content: center;
+    z-index: 70;
+  }
+  .admin-modal.open { display: flex; }
+  .admin-box {
+    background: var(--card);
+    border-radius: 16px;
+    padding: 28px;
+    width: 300px;
+    max-width: 90vw;
+    text-align: center;
+  }
+  .admin-box h3 { margin: 0 0 16px; font-size: 17px; }
+  .admin-input {
+    width: 100%;
+    padding: 10px 12px;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    font-size: 14px;
+    margin-bottom: 6px;
+    box-sizing: border-box;
+  }
+  .password-field {
+    position: relative;
+  }
+  .password-field .admin-input {
+    padding-right: 40px;
+  }
+  .eye-toggle {
+    position: absolute;
+    right: 8px;
+    top: 8px;
+    background: none;
+    border: none;
+    cursor: pointer;
+    font-size: 16px;
+    padding: 4px;
+    line-height: 1;
+    color: var(--muted);
+  }
+  .reset-note {
+    font-size: 12px;
+    color: var(--muted);
+    margin-bottom: 14px;
+    line-height: 1.5;
+  }
+  .admin-error {
+    color: var(--accent);
+    font-size: 12px;
+    min-height: 16px;
+    margin-bottom: 10px;
+  }
+  .forgot-link {
+    width: 100%;
+    background: none;
+    border: none;
+    color: var(--accent);
+    font-size: 12px;
+    text-decoration: underline;
+    cursor: pointer;
+    margin-top: 10px;
+  }
+  .otp-note {
+    font-size: 12px;
+    color: var(--muted);
+    margin-bottom: 14px;
+    line-height: 1.5;
+  }
+  .toast {
+    position: fixed;
+    bottom: 24px;
+    left: 50%;
+    transform: translateX(-50%);
+    background: var(--ink);
+    color: #fff;
+    padding: 10px 18px;
+    border-radius: 8px;
+    font-size: 13px;
+    z-index: 80;
+    display: none;
+  }
+  .toast.show { display: block; }
+  .add-item-card {
+    background: var(--card);
+    border: 2px dashed var(--border);
+    border-radius: 14px;
+    padding: 20px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    cursor: pointer;
+    color: var(--muted);
+    font-weight: 700;
+    min-height: 168px;
+  }
+  .add-item-card:hover { background: #f3ece2; color: var(--accent); border-color: var(--accent); }
+  .add-item-card .plus { font-size: 30px; line-height: 1; }
+  .item-modal {
+    position: fixed;
+    inset: 0;
+    background: rgba(42,27,20,0.55);
+    display: none;
+    align-items: center;
+    justify-content: center;
+    z-index: 70;
+  }
+  .item-modal.open { display: flex; }
+  .item-box {
+    background: var(--card);
+    border-radius: 16px;
+    padding: 26px;
+    width: 320px;
+    max-width: 90vw;
+  }
+  .item-box h3 { margin: 0 0 16px; font-size: 17px; text-align: center; }
+  .field-label {
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--muted);
+    margin: 10px 0 4px;
+  }
+  .item-input {
+    width: 100%;
+    padding: 9px 12px;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    font-size: 14px;
+    box-sizing: border-box;
+  }
+  .item-error {
+    color: var(--accent);
+    font-size: 12px;
+    min-height: 16px;
+    margin-top: 8px;
+  }
+  .reset-checkbox-row {
+    display: flex;
+    align-items: flex-start;
+    gap: 8px;
+    font-size: 12px;
+    color: var(--muted);
+    margin-bottom: 12px;
+    text-align: left;
+  }
+  .reset-checkbox-row input { margin-top: 2px; }
+</style>
+ <script type="module">
+  import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
+  import { getAuth, signInWithEmailAndPassword, sendPasswordResetEmail } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
+  import { getFirestore, doc, getDoc, setDoc } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
+
+  const firebaseConfig = {
+    apiKey: "AIzaSyBFxIFfgtTYT8vb42rPIQ-eJClzm73xttw",
+    authDomain: "freshmeat-6bfd0.firebaseapp.com",
+    projectId: "freshmeat-6bfd0",
+    storageBucket: "freshmeat-6bfd0.firebasestorage.app",
+    messagingSenderId: "329301869183",
+    appId: "1:329301869183:web:5145e6b73cc5a85e85b54a"
+  };
+
+  const app = initializeApp(firebaseConfig);
+  const auth = getAuth(app);
+  const db = getFirestore(app);
+
+  const ADMIN_EMAIL = "muraliitjio11@gmail.com";
+  const SHOP_ID = "customer2"; // unique per customer deployment — change this for future customers
+  window.SHOP_ID = SHOP_ID; // exposed for freshmeat-paywall.js so trials are scoped per shop
+
+  window.firebaseAdminSignIn = async function (enteredPassword) {
+    return signInWithEmailAndPassword(auth, ADMIN_EMAIL, enteredPassword);
+  };
+
+  window.firebaseSendPasswordReset = async function () {
+    return sendPasswordResetEmail(auth, ADMIN_EMAIL);
+  };
+
+  window.ADMIN_EMAIL_DISPLAY = ADMIN_EMAIL;
+
+  // ---- Shared product catalog (Firestore-backed — every visitor sees the same live prices) ----
+  window.fetchSharedProducts = async function () {
+    const ref = doc(db, "shopProducts", SHOP_ID);
+    const snap = await getDoc(ref);
+    return snap.exists() ? snap.data() : null;
+  };
+
+  window.saveSharedProducts = async function (productsArray, nextAddedAtValue) {
+    const ref = doc(db, "shopProducts", SHOP_ID);
+    await setDoc(ref, { products: productsArray, nextAddedAt: nextAddedAtValue, updatedAt: Date.now() });
+  };
+</script>
+<script type="module" src="freshmeat-paywall.js"></script>
+</head>
+<body>
+
+<div class="header">
+  <div class="header-inner">
+    <div class="logo">
+      <span style="font-size:22px;">🥩</span>
+      <span class="name">FreshMeat Shop</span>
+      <span class="tag">· pay by UPI</span>
+    </div>
+    <div style="display:flex; align-items:center;">
+      <button class="admin-btn" id="export-btn" onclick="exportToExcel()" style="display:none;">⬇️ Export</button>
+      <button class="admin-btn" id="restore-btn" onclick="document.getElementById('restore-file-input').click()" style="display:none;">⬆️ Restore</button>
+      <button class="admin-btn" id="reset-invoice-btn" onclick="openInvoiceResetModal()" style="display:none;">🗑️ Reset Invoices</button>
+      <input type="file" id="restore-file-input" accept=".xlsx" style="display:none;" onchange="handleRestoreFile(event)" />
+      <button class="admin-btn" id="admin-btn" onclick="toggleAdmin()">🔒 Admin</button>
+      <div class="cart-pill" onclick="openDrawer()">
+        🛒 Cart
+        <span class="cart-badge" id="cart-badge">0</span>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="hero">
+  <h1>Farm-fresh meat &amp; seafood, delivered</h1>
+  <p>Cleaned, cut fresh to order. Pay instantly with any UPI app.</p>
+</div>
+
+<div class="grid" id="product-grid"></div>
+
+<div class="overlay" id="overlay" onclick="closeDrawer()"></div>
+<div class="drawer" id="drawer">
+  <div class="drawer-head">
+    <h2>Your cart</h2>
+    <button class="close-btn" onclick="closeDrawer()">✕</button>
+  </div>
+  <div class="drawer-body" id="drawer-body"></div>
+  <div class="drawer-foot">
+    <div class="bill-meta" id="bill-meta"></div>
+    <div class="total-row">
+      <span>Total</span>
+      <span id="drawer-total">₹0</span>
+    </div>
+    <button class="pay-btn" id="pay-trigger" onclick="openPayModal()" disabled>Proceed to pay</button>
+    <button class="history-link" onclick="openHistoryModal()">View bill history</button>
+  </div>
+</div>
+
+<div class="pay-modal" id="pay-modal">
+  <div class="pay-box">
+    <h3>Pay with any UPI app</h3>
+    <div class="pay-amount" id="pay-amount">₹0</div>
+    <div class="pay-invoice-line" id="pay-invoice-no"></div>
+    <div id="qr-holder"></div>
+    <div class="payee" id="payee-name"></div>
+    <div class="upi-row">
+      <span id="upi-id-text"></span>
+      <button class="copy-btn" onclick="copyUpi()">Copy</button>
+    </div>
+    <div class="bank-line" id="bank-line-text">Replace with shop's bank name</div>
+    <button class="done-btn" onclick="markPaid()">I've paid</button>
+    <button class="cancel-btn" onclick="closePayModal()">Cancel</button>
+  </div>
+</div>
+
+<div class="pay-modal" id="delivery-modal">
+  <div class="pay-box">
+    <h3>Payment confirmed 🎉</h3>
+    <div style="color:var(--muted); font-size:14px; margin:6px 0 20px;">How would you like your order?</div>
+    <button class="done-btn" onclick="chooseDelivery('Hand Carry')">Hand Carry</button>
+    <button class="done-btn" onclick="chooseDelivery('Courier')">Courier</button>
+  </div>
+</div>
+
+<div class="admin-modal" id="admin-modal">
+  <div class="admin-box">
+    <h3>Enter admin password</h3>
+    <div class="password-field">
+      <input type="password" class="admin-input" id="admin-password-input" placeholder="Password" />
+      <button type="button" class="eye-toggle" onclick="togglePasswordVisibility('admin-password-input', this)">👁️</button>
+    </div>
+    <div class="admin-error" id="admin-error"></div>
+    <button class="done-btn" onclick="submitAdminPassword()">Unlock</button>
+    <button class="cancel-btn" onclick="closeAdminModal()">Cancel</button>
+    <button class="forgot-link" onclick="startPasswordReset()">Forgot password? Reset via email</button>
+  </div>
+</div>
+
+<div class="admin-modal" id="reset-modal">
+  <div class="admin-box" id="reset-step-confirm">
+    <h3>Reset admin password</h3>
+    <div class="reset-note">We'll send a password reset link to the admin email on file (<span id="reset-email-mask"></span>). Open it on this device to set a new password, then come back and unlock with it.</div>
+    <div class="admin-error" id="reset-error"></div>
+    <button class="done-btn" onclick="sendPasswordReset()">Send reset email</button>
+    <button class="cancel-btn" onclick="closeResetModal()">Cancel</button>
+  </div>
+  <div class="admin-box" id="reset-step-sent" style="display:none;">
+    <h3>Check your email</h3>
+    <div class="reset-note">A reset link was sent to <span id="reset-email-sent"></span>. Follow it to set a new password, then unlock Admin here with the new one.</div>
+    <button class="done-btn" onclick="closeResetModal()">Done</button>
+  </div>
+</div>
+
+<div class="admin-modal" id="invoice-reset-modal">
+  <div class="admin-box">
+    <h3>⚠️ Reset Invoice Data</h3>
+    <div class="reset-note">
+      This will permanently erase all bill history and reset the invoice number back to 001. <strong>This cannot be undone.</strong><br><br>
+      Please export a backup (⬇️ Export) first, or make sure you've saved a copy via email/WhatsApp/mobile — you will not be able to recover this data afterward.
+    </div>
+    <label class="reset-checkbox-row">
+      <input type="checkbox" id="reset-backup-confirm" />
+      <span>I have taken a backup and understand this cannot be undone.</span>
+    </label>
+    <div class="password-field">
+      <input type="password" class="admin-input" id="reset-confirm-password" placeholder="Re-enter admin password" />
+      <button type="button" class="eye-toggle" onclick="togglePasswordVisibility('reset-confirm-password', this)">👁️</button>
+    </div>
+    <div class="admin-error" id="invoice-reset-error"></div>
+    <button class="done-btn" onclick="confirmInvoiceReset()" style="background:var(--accent);">Reset Invoice Data</button>
+    <button class="cancel-btn" onclick="closeInvoiceResetModal()">Cancel</button>
+  </div>
+</div>
+
+<div class="history-modal" id="history-modal">
+  <div class="history-box">
+    <h3>Bill history</h3>
+    <div class="history-note">Saved on this device — stays until you clear browser data.</div>
+    <div class="history-list" id="history-list"></div>
+    <button class="cancel-btn" onclick="closeHistoryModal()">Close</button>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<div class="item-modal" id="item-modal">
+  <div class="item-box">
+    <h3>Add new item</h3>
+    <div class="field-label">Emoji</div>
+    <input type="text" class="item-input" id="new-item-emoji" placeholder="🐖" maxlength="4" />
+    <div class="field-label">Name</div>
+    <input type="text" class="item-input" id="new-item-name" placeholder="e.g. Pork" />
+    <div class="field-label">Unit</div>
+    <input type="text" class="item-input" id="new-item-unit" placeholder="e.g. per kg" />
+    <div class="field-label">Price (₹)</div>
+    <input type="number" min="0" class="item-input" id="new-item-price" placeholder="e.g. 380" />
+    <div class="item-error" id="item-error"></div>
+    <button class="done-btn" onclick="submitNewItem()" style="margin-top:10px;">Add item</button>
+    <button class="cancel-btn" onclick="closeAddItemModal()">Cancel</button>
+  </div>
+</div>
+
+<script>
+  const PRODUCTS = [
+    { id: "eggs", name: "Eggs", unit: "per piece", price: 6, emoji: "🥚", addedAt: 1 },
+    { id: "chicken", name: "Chicken", unit: "per piece", price: 9, emoji: "🍗", addedAt: 2 },
+    { id: "mutton", name: "Mutton", unit: "per kg", price: 14, emoji: "🍖", addedAt: 3 },
+    { id: "fish", name: "Rohu Fish", unit: "per kg", price: 26, emoji: "🐟", addedAt: 7 },
+    { id: "prawns", name: "Prawns", unit: "per kg", price: 48, emoji: "🦐", addedAt: 12 },
+    { id: "crab", name: "Crab", unit: "per kg", price: 42, emoji: "🦀", addedAt: 11 },
+    { id: "pomfret", name: "Pomfret", unit: "per kg", price: 65, emoji: "🐠", addedAt: 9 },
+    { id: "duck", name: "Duck", unit: "per kg", price: 38, emoji: "🦆", addedAt: 6 },
+    { id: "liver", name: "Chicken Liver", unit: "per 500g", price: 11, emoji: "🍗", addedAt: 15 },
+    { id: "bacon", name: "Bacon", unit: "per 250g", price: 19, emoji: "🥓", addedAt: 16 },
+    { id: "sausage", name: "Sausages", unit: "per pack", price: 16, emoji: "🌭", addedAt: 17 },
+    { id: "squid", name: "Squid", unit: "per kg", price: 34, emoji: "🦑", addedAt: 10 },
+    { id: "pork", name: "Pork", unit: "per kg", price: 29, emoji: "🐖", addedAt: 4 },
+    { id: "rabbit", name: "Rabbit", unit: "per kg", price: 45, emoji: "🐇", addedAt: 5 },
+    { id: "fish-head", name: "Fish Head", unit: "per piece", price: 9, emoji: "🐟", addedAt: 8 },
+    { id: "lobster-small", name: "Lobster (small)", unit: "per piece", price: 55, emoji: "🦞", addedAt: 14 },
+    { id: "tiger-prawns", name: "Tiger Prawns", unit: "per kg", price: 65, emoji: "🦐", addedAt: 13 },
+  ];
+
+  const UPI_ID = "REPLACE_WITH_SHOP_UPI_ID"; // e.g. shopowner@okhdfcbank — get this from the shop owner before deploying
+  const UPI_NAME = "REPLACE WITH SHOP OWNER NAME"; // must match the name registered on their UPI ID
+  const SHOP_NAME = "FreshMeat Shop";
+  const SHOP_ADDRESS = "REPLACE WITH SHOP ADDRESS";
+  const SHOP_MOBILE = "REPLACE_WITH_SHOP_MOBILE";
+
+  let adminUnlocked = false;
+  let nextAddedAt = Math.max(...PRODUCTS.map((p) => p.addedAt)) + 1;
+  let invoiceCounter = 1;
+  let currentInvoice = null;
+  let billHistory = [];
+  let pendingDeliveryBill = null; // the bill entry awaiting a Hand Carry / Courier choice
+
+  // Shared A–Z comparison (case-insensitive, numbers in natural order)
+  function byName(a, b) {
+    return a.localeCompare(b, "en", { sensitivity: "base", numeric: true });
+  }
+
+  // --- Persistence (localStorage: automatic, survives refresh on this browser) ---
+  const STORAGE_KEY = "freshmeat-state-v1";
+
+  function saveState() {
+    try {
+      const state = {
+        products: PRODUCTS,
+        nextAddedAt,
+        billHistory,
+        invoiceCounter,
+        cart,
+      };
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+    } catch (e) {
+      console.warn("Could not save state to localStorage:", e);
+    }
+  }
+
+  function loadState() {
+    try {
+      const raw = localStorage.getItem(STORAGE_KEY);
+      if (!raw) return;
+      const state = JSON.parse(raw);
+      if (Array.isArray(state.billHistory)) billHistory = state.billHistory;
+      if (typeof state.invoiceCounter === "number") invoiceCounter = state.invoiceCounter;
+      if (state.cart && typeof state.cart === "object") {
+        Object.keys(state.cart).forEach((id) => {
+          // Skip cart items whose product no longer exists (deleted/restored catalog)
+          if (PRODUCTS.some((p) => p.id === id)) cart[id] = state.cart[id];
+        });
+      }
+    } catch (e) {
+      console.warn("Could not load saved state:", e);
+    }
+  }
+
+  function formatDateTime(d) {
+    const date = d.toLocaleDateString("en-IN", { day: "2-digit", month: "short", year: "numeric" });
+    const time = d.toLocaleTimeString("en-IN", { hour: "2-digit", minute: "2-digit" });
+    return { date, time };
+  }
+
+  function makeInvoiceNo(d) {
+    const y = d.getFullYear();
+    const m = String(d.getMonth() + 1).padStart(2, "0");
+    const day = String(d.getDate()).padStart(2, "0");
+    const seq = String(invoiceCounter).padStart(3, "0");
+    return `INV-${y}${m}${day}-${seq}`;
+  }
+
+  const cart = {};
+
+  // Removes cart entries whose product no longer exists (e.g. after a restore)
+  function pruneCart() {
+    Object.keys(cart).forEach((id) => {
+      if (!PRODUCTS.some((p) => p.id === id)) delete cart[id];
+    });
+  }
+
+  function totalCount() {
+    return Object.values(cart).reduce((a, b) => a + b, 0);
+  }
+
+  function totalAmount() {
+    return Object.entries(cart).reduce((sum, [id, qty]) => {
+      const p = PRODUCTS.find((x) => x.id === id);
+      return p ? sum + p.price * qty : sum;
+    }, 0);
+  }
+
+  function updateBadge() {
+    const badge = document.getElementById("cart-badge");
+    const count = totalCount();
+    if (count > 0) {
+      badge.style.display = "inline-block";
+      badge.textContent = count;
+    } else {
+      badge.style.display = "none";
+    }
+  }
+
+  function addOne(id) {
+    cart[id] = (cart[id] || 0) + 1;
+    renderCard(id);
+    updateBadge();
+    renderDrawer();
+    saveState();
+  }
+
+  function removeOne(id) {
+    if (!cart[id]) return;
+    cart[id] -= 1;
+    if (cart[id] <= 0) delete cart[id];
+    renderCard(id);
+    updateBadge();
+    renderDrawer();
+    saveState();
+  }
+
+  function toggleAdmin() {
+    if (adminUnlocked) {
+      adminUnlocked = false;
+      document.getElementById("admin-btn").textContent = "🔒 Admin";
+      document.getElementById("admin-btn").classList.remove("unlocked");
+      document.getElementById("export-btn").style.display = "none";
+      document.getElementById("restore-btn").style.display = "none";
+      document.getElementById("reset-invoice-btn").style.display = "none";
+      renderGrid();
+      return;
+    }
+    document.getElementById("admin-password-input").value = "";
+    document.getElementById("admin-error").textContent = "";
+    document.getElementById("admin-modal").classList.add("open");
+    document.getElementById("admin-password-input").focus();
+  }
+
+  function closeAdminModal() {
+    document.getElementById("admin-modal").classList.remove("open");
+  }
+
+  async function submitAdminPassword() {
+    const entered = document.getElementById("admin-password-input").value;
+    try {
+      await window.firebaseAdminSignIn(entered);
+      adminUnlocked = true;
+      document.getElementById("admin-btn").textContent = "🔓 Admin";
+      document.getElementById("admin-btn").classList.add("unlocked");
+      document.getElementById("export-btn").style.display = "inline-block";
+      document.getElementById("restore-btn").style.display = "inline-block";
+      document.getElementById("reset-invoice-btn").style.display = "inline-block";
+      renderGrid();
+      closeAdminModal();
+    } catch (err) {
+      document.getElementById("admin-error").textContent = "Incorrect password. Try again.";
+    }
+  }
+
+  // --- Show/hide password toggle (used on admin login field) ---
+  function togglePasswordVisibility(inputId, btn) {
+    const input = document.getElementById(inputId);
+    if (input.type === "password") {
+      input.type = "text";
+      btn.textContent = "🙈";
+    } else {
+      input.type = "password";
+      btn.textContent = "👁️";
+    }
+  }
+
+  // --- Forgot password: real Firebase email reset link ---
+  function startPasswordReset() {
+    closeAdminModal();
+    const email = window.ADMIN_EMAIL_DISPLAY || "";
+    document.getElementById("reset-email-mask").textContent = email;
+    document.getElementById("reset-error").textContent = "";
+    document.getElementById("reset-step-confirm").style.display = "block";
+    document.getElementById("reset-step-sent").style.display = "none";
+    document.getElementById("reset-modal").classList.add("open");
+  }
+
+  function closeResetModal() {
+    document.getElementById("reset-modal").classList.remove("open");
+  }
+
+  async function sendPasswordReset() {
+    try {
+      await window.firebaseSendPasswordReset();
+      document.getElementById("reset-email-sent").textContent = window.ADMIN_EMAIL_DISPLAY || "";
+      document.getElementById("reset-step-confirm").style.display = "none";
+      document.getElementById("reset-step-sent").style.display = "block";
+    } catch (err) {
+      document.getElementById("reset-error").textContent = "Couldn't send reset email. Try again shortly.";
+    }
+  }
+
+  // --- Invoice/bill-history reset (double-confirm: backup checkbox + re-entered password) ---
+  function openInvoiceResetModal() {
+    document.getElementById("reset-backup-confirm").checked = false;
+    document.getElementById("reset-confirm-password").value = "";
+    document.getElementById("invoice-reset-error").textContent = "";
+    document.getElementById("invoice-reset-modal").classList.add("open");
+  }
+
+  function closeInvoiceResetModal() {
+    document.getElementById("invoice-reset-modal").classList.remove("open");
+  }
+
+  async function confirmInvoiceReset() {
+    const backedUp = document.getElementById("reset-backup-confirm").checked;
+    const entered = document.getElementById("reset-confirm-password").value;
+    if (!backedUp) {
+      document.getElementById("invoice-reset-error").textContent = "Please confirm you've taken a backup first.";
+      return;
+    }
+    if (!entered) {
+      document.getElementById("invoice-reset-error").textContent = "Please re-enter your admin password.";
+      return;
+    }
+    try {
+      await window.firebaseAdminSignIn(entered);
+      billHistory = [];
+      invoiceCounter = 1;
+      currentInvoice = null;
+      saveState();
+      renderDrawer();
+      closeInvoiceResetModal();
+      showToast("Invoice history reset. Numbering restarts at 001.");
+    } catch (err) {
+      document.getElementById("invoice-reset-error").textContent = "Incorrect password.";
+    }
+  }
+
+  function showToast(msg) {
+    const t = document.getElementById("toast");
+    t.textContent = msg;
+    t.classList.add("show");
+    setTimeout(() => t.classList.remove("show"), 2000);
+  }
+
+  // ---------- Product photo support ----------
+  // Shows the photo if the product has one, otherwise its emoji.
+  function productIcon(p, cls = "product-img") {
+    return p.image ? `<img src="${p.image}" class="${cls}" alt="${p.name}">` : p.emoji;
+  }
+
+  function renderEmojiBlock(id) {
+    const p = PRODUCTS.find((x) => x.id === id);
+    const el = document.getElementById("emoji-block-" + id);
+    if (!adminUnlocked) {
+      el.innerHTML = productIcon(p);
+      return;
+    }
+    el.innerHTML = `
+      <div class="photo-row">
+        ${p.image
+          ? productIcon(p)
+          : `<input class="emoji-input" type="text" value="${p.emoji}" id="emoji-input-${id}" maxlength="4" />`}
+        <label class="edit-icon">📷 Photo
+          <input type="file" accept="image/*" style="display:none" onchange="uploadPhoto('${id}', this)">
+        </label>
+        ${p.image ? `<span class="edit-icon" onclick="removePhoto('${id}')">✕ Remove</span>` : ""}
+      </div>`;
+  }
+
+  // Shrinks any photo to ~160px JPEG on a white background, kept under
+  // ~30,000 characters so it fits in Firestore and in an Excel backup cell.
+  function resizeImage(file, max = 160) {
+    return new Promise((resolve, reject) => {
+      const img = new Image();
+      img.onload = () => {
+        const scale = Math.min(1, max / Math.max(img.width, img.height));
+        const c = document.createElement("canvas");
+        c.width = Math.round(img.width * scale);
+        c.height = Math.round(img.height * scale);
+        const ctx = c.getContext("2d");
+        ctx.fillStyle = "#fff";
+        ctx.fillRect(0, 0, c.width, c.height);
+        ctx.drawImage(img, 0, 0, c.width, c.height);
+        let q = 0.8;
+        let url = c.toDataURL("image/jpeg", q);
+        while (url.length > 30000 && q > 0.3) {
+          q -= 0.1;
+          url = c.toDataURL("image/jpeg", q);
+        }
+        URL.revokeObjectURL(img.src);
+        resolve(url);
+      };
+      img.onerror = reject;
+      img.src = URL.createObjectURL(file);
+    });
+  }
+
+  async function uploadPhoto(id, input) {
+    const file = input.files[0];
+    if (!file) return;
+    try {
+      const p = PRODUCTS.find((x) => x.id === id);
+      p.image = await resizeImage(file);
+      renderGrid();
+      persistProducts();
+      showToast("Photo updated.");
+    } catch (e) {
+      showToast("Couldn't read that image.");
+    }
+  }
+
+  function removePhoto(id) {
+    const p = PRODUCTS.find((x) => x.id === id);
+    delete p.image; // delete (not undefined) — Firestore rejects undefined fields
+    renderGrid();
+    persistProducts();
+    showToast("Photo removed.");
+  }
+  // ---------- end photo support ----------
+
+  function renderNameBlock(id) {
+    const p = PRODUCTS.find((x) => x.id === id);
+    const el = document.getElementById("name-block-" + id);
+    if (!adminUnlocked) {
+      el.innerHTML = p.name;
+    } else {
+      el.innerHTML = `<input class="name-input" type="text" value="${p.name}" id="name-input-${id}" />`;
+    }
+  }
+
+  const UNIT_OPTIONS = ["per kg", "per 500g", "per 250g", "per gram", "per piece", "per dozen", "per box", "per pack"];
+
+  function renderUnitBlock(id) {
+    const p = PRODUCTS.find((x) => x.id === id);
+    const el = document.getElementById("unit-block-" + id);
+    if (!adminUnlocked) {
+      el.innerHTML = p.unit;
+    } else {
+      const options = UNIT_OPTIONS.includes(p.unit) ? UNIT_OPTIONS : [p.unit, ...UNIT_OPTIONS];
+      const optionsHtml = options.map(
+        (u) => `<option value="${u}" ${u === p.unit ? "selected" : ""}>${u}</option>`
+      ).join("");
+      el.innerHTML = `<select class="unit-input" id="unit-input-${id}">${optionsHtml}</select>`;
+    }
+  }
+
+  function renderPriceBlock(id) {
+    const p = PRODUCTS.find((x) => x.id === id);
+    const el = document.getElementById("price-block-" + id);
+    if (!adminUnlocked) {
+      el.innerHTML = `₹${p.price}`;
+    } else {
+      el.innerHTML = `
+        ₹<input class="price-input" type="number" min="0" value="${p.price}" id="input-${id}" />
+        <span class="edit-icon" onclick="saveItem('${id}')">Save</span>`;
+    }
+  }
+
+  function saveItem(id) {
+    const p = PRODUCTS.find((x) => x.id === id);
+    const emojiInput = document.getElementById("emoji-input-" + id);
+    const nameInput = document.getElementById("name-input-" + id);
+    const unitInput = document.getElementById("unit-input-" + id);
+    const priceInput = document.getElementById("input-" + id);
+    // When the product has a photo, the emoji box isn't shown — keep the old emoji.
+    const newEmoji = emojiInput ? (emojiInput.value.trim() || "🍽️") : p.emoji;
+    const newName = nameInput.value.trim();
+    const newUnit = unitInput.value;
+    const newPrice = parseFloat(priceInput.value);
+
+    if (!newName) {
+      showToast("Item name can't be empty.");
+      return;
+    }
+    if (isNaN(newPrice) || newPrice < 0) {
+      showToast("Enter a valid price.");
+      return;
+    }
+    p.emoji = newEmoji;
+    p.name = newName;
+    p.unit = newUnit;
+    p.price = newPrice;
+    renderGrid(); // full redraw so a renamed item moves to its A–Z position (also refreshes the cart)
+    persistProducts();
+    showToast("Item updated.");
+  }
+
+  function renderCard(id) {
+    const qty = cart[id] || 0;
+    const controlsEl = document.getElementById("controls-" + id);
+    if (!controlsEl) return;
+    if (qty === 0) {
+      controlsEl.innerHTML = `<button class="add-btn" onclick="addOne('${id}')">Add to cart</button>`;
+    } else {
+      controlsEl.innerHTML = `
+        <div class="stepper">
+          <button class="step-btn" onclick="removeOne('${id}')">−</button>
+          <span class="qty">${qty}</span>
+          <button class="step-btn" onclick="addOne('${id}')">+</button>
+        </div>`;
+    }
+  }
+
+  function renderDrawer() {
+    pruneCart();
+    const body = document.getElementById("drawer-body");
+    const nameOf = (id) => PRODUCTS.find((p) => p.id === id).name;
+    const entries = Object.entries(cart).sort(([a], [b]) => byName(nameOf(a), nameOf(b)));
+    if (entries.length === 0) {
+      body.innerHTML = `<div class="empty-cart">Your cart is empty.<br/>Add something fresh!</div>`;
+    } else {
+      body.innerHTML = entries.map(([id, qty]) => {
+        const p = PRODUCTS.find((x) => x.id === id);
+        return `
+          <div class="line-item">
+            <div class="line-emoji">${productIcon(p, "line-img")}</div>
+            <div class="line-info">
+              <div class="line-name">${p.name}</div>
+              <div class="line-sub">${qty} × ₹${p.price}</div>
+            </div>
+            <div class="line-total">₹${p.price * qty}</div>
+          </div>`;
+      }).join("");
+    }
+    const total = totalAmount();
+    document.getElementById("drawer-total").textContent = "₹" + total;
+    document.getElementById("pay-trigger").disabled = total === 0;
+
+    const metaEl = document.getElementById("bill-meta");
+    if (total === 0) {
+      currentInvoice = null;
+      metaEl.innerHTML = "";
+    } else {
+      if (!currentInvoice) {
+        const now = new Date();
+        const { date, time } = formatDateTime(now);
+        currentInvoice = { no: makeInvoiceNo(now), date, time, timestamp: now };
+      }
+      metaEl.innerHTML = `
+        <div class="shop-name">${SHOP_NAME}</div>
+        <div class="shop-address">${SHOP_ADDRESS}<br>Mobile No: ${SHOP_MOBILE}</div>
+        <div class="row"><span>Invoice No.</span><span>${currentInvoice.no}</span></div>
+        <div class="row"><span>Date</span><span>${currentInvoice.date}</span></div>
+        <div class="row"><span>Time</span><span>${currentInvoice.time}</span></div>`;
+    }
+  }
+
+  function openDrawer() {
+    document.getElementById("drawer").classList.add("open");
+    document.getElementById("overlay").classList.add("open");
+  }
+  function closeDrawer() {
+    document.getElementById("drawer").classList.remove("open");
+    document.getElementById("overlay").classList.remove("open");
+  }
+
+  // --- Paywall guard: called before opening the pay modal AND before
+  // recording payment. If the phone's trial/access has expired, this shows
+  // the paywall overlay (via freshmeat-paywall.js) and returns false so the
+  // caller aborts — this is what actually blocks checkout, not just the
+  // overlay's own periodic display.
+  async function paywallAllows() {
+    if (typeof window.fmCheckAccessBlocking !== "function") {
+      // Paywall script not loaded/ready — fail safe by allowing, so a
+      // transient load hiccup doesn't lock out a legitimately-paid customer.
+      return true;
+    }
+    return window.fmCheckAccessBlocking();
+  }
+
+  async function openPayModal() {
+    const total = totalAmount();
+    if (total === 0) return;
+    if (!(await paywallAllows())) {
+      return; // trial/access expired — paywall shown instead, checkout aborted
+    }
+    document.getElementById("pay-amount").textContent = "₹" + total;
+    document.getElementById("pay-invoice-no").textContent = currentInvoice ? currentInvoice.no : "";
+    document.getElementById("payee-name").textContent = UPI_NAME;
+    document.getElementById("upi-id-text").textContent = UPI_ID;
+    const upiUrl = `upi://pay?pa=${encodeURIComponent(UPI_ID)}&pn=${encodeURIComponent(UPI_NAME)}&am=${total}&cu=INR&tn=${encodeURIComponent(currentInvoice ? currentInvoice.no : "")}`;
+    const holder = document.getElementById("qr-holder");
+    holder.innerHTML = "";
+    new QRCode(holder, {
+      text: upiUrl,
+      width: 180,
+      height: 180,
+      colorDark: "#2A1B14",
+      colorLight: "#FCFAF6",
+    });
+    document.getElementById("pay-modal").classList.add("open");
+  }
+  function closePayModal() {
+    document.getElementById("pay-modal").classList.remove("open");
+  }
+  async function markPaid() {
+    // Second guard: covers the case where the trial/access expires in the
+    // gap between opening the pay modal and clicking "I've paid".
+    if (!(await paywallAllows())) {
+      closePayModal();
+      return; // don't record the sale — access expired mid-checkout
+    }
+    if (currentInvoice) {
+      const items = Object.entries(cart).map(([id, qty]) => {
+        const p = PRODUCTS.find((x) => x.id === id);
+        return { name: p.name, unit: p.unit, qty, price: p.price };
+      });
+      const billEntry = {
+        no: currentInvoice.no,
+        date: currentInvoice.date,
+        time: currentInvoice.time,
+        total: totalAmount(),
+        items,
+        deliveryMethod: null,
+      };
+      billHistory.unshift(billEntry);
+      invoiceCounter++;
+      pendingDeliveryBill = billEntry;
+    }
+    for (const id of Object.keys(cart)) {
+      delete cart[id];
+      renderCard(id);
+    }
+    currentInvoice = null;
+    updateBadge();
+    renderDrawer();
+    closePayModal();
+    saveState();
+    showToast("Payment recorded.");
+    if (pendingDeliveryBill) {
+      document.getElementById("delivery-modal").classList.add("open");
+    } else {
+      closeDrawer();
+    }
+  }
+  // Builds the printable invoice and opens the browser print dialog. If no
+  // printer is connected, the dialog's own "Save as PDF" destination covers
+  // the fallback — nothing extra to wire up for that.
+  function printInvoice(billEntry) {
+    const rows = billEntry.items.map((it) => `
+      <tr>
+        <td>${it.name}${it.unit ? ` <span style="color:#888;">(${it.unit})</span>` : ""}</td>
+        <td>${it.qty}</td>
+        <td>₹${it.price}</td>
+        <td>₹${it.qty * it.price}</td>
+      </tr>`).join("");
+    document.getElementById("print-invoice").innerHTML = `
+      <h2>${SHOP_NAME}</h2>
+      <div class="pi-address">${SHOP_ADDRESS}<br>Mobile No: ${SHOP_MOBILE}</div>
+      <div class="pi-row"><span>Invoice No.</span><span>${billEntry.no}</span></div>
+      <div class="pi-row"><span>Date</span><span>${billEntry.date}</span></div>
+      <div class="pi-row"><span>Time</span><span>${billEntry.time}</span></div>
+      <table>
+        <thead><tr><th>Item</th><th>Qty</th><th>Price</th><th>Total</th></tr></thead>
+        <tbody>${rows}</tbody>
+      </table>
+      <div class="pi-total">Total: ₹${billEntry.total}</div>`;
+    // Chrome/Edge/Safari suggest the page <title> as the "Save as PDF"
+    // filename. Swap in a unique one (invoice no + date) for the duration
+    // of the print dialog so repeated saves don't collide/prompt to
+    // overwrite, then restore the normal tab title afterwards.
+    const originalTitle = document.title;
+    document.title = `${SHOP_NAME} - ${billEntry.no} - ${billEntry.date}`;
+    window.print();
+    document.title = originalTitle;
+  }
+
+  function chooseDelivery(method) {
+    if (pendingDeliveryBill) {
+      pendingDeliveryBill.deliveryMethod = method;
+      saveState();
+      printInvoice(pendingDeliveryBill);
+      pendingDeliveryBill = null;
+    }
+    document.getElementById("delivery-modal").classList.remove("open");
+    closeDrawer();
+  }
+  function copyUpi() {
+    navigator.clipboard.writeText(UPI_ID);
+  }
+
+  function openHistoryModal() {
+    renderHistoryList();
+    document.getElementById("history-modal").classList.add("open");
+  }
+  function closeHistoryModal() {
+    document.getElementById("history-modal").classList.remove("open");
+  }
+  function renderHistoryList() {
+    const list = document.getElementById("history-list");
+    if (billHistory.length === 0) {
+      list.innerHTML = `<div class="history-empty">No paid bills yet this session.</div>`;
+      return;
+    }
+    list.innerHTML = billHistory.map((h) => `
+      <div class="history-item">
+        <div class="h-top"><span>${h.no}</span><span>₹${h.total}</span></div>
+        <div class="h-sub">${h.date} · ${h.time} · ${h.items.length} item${h.items.length > 1 ? "s" : ""}${h.deliveryMethod ? " · " + h.deliveryMethod : ""}</div>
+      </div>
+    `).join("");
+  }
+
+  function renderGrid() {
+    pruneCart();
+    const grid = document.getElementById("product-grid");
+    const sorted = [...PRODUCTS].sort((a, b) => byName(a.name, b.name));
+    let html = sorted.map((p) => `
+      <div class="card">
+        <div class="emoji" id="emoji-block-${p.id}"></div>
+        <div>
+          <div class="name" id="name-block-${p.id}"></div>
+          <div class="unit" id="unit-block-${p.id}"></div>
+        </div>
+        <div class="price" id="price-block-${p.id}"></div>
+        <div id="controls-${p.id}">
+          <button class="add-btn" onclick="addOne('${p.id}')">Add to cart</button>
+        </div>
+      </div>
+    `).join("");
+    if (adminUnlocked) {
+      html += `
+        <div class="add-item-card" onclick="openAddItemModal()">
+          <div class="plus">+</div>
+          <div>Add new item</div>
+        </div>`;
+    }
+    grid.innerHTML = html;
+    PRODUCTS.forEach((p) => { renderPriceBlock(p.id); renderNameBlock(p.id); renderUnitBlock(p.id); renderEmojiBlock(p.id); });
+    // Restore any in-progress quantities after a re-render
+    Object.keys(cart).forEach((id) => renderCard(id));
+    updateBadge();
+    renderDrawer();
+  }
+
+  function slugify(name) {
+    let base = name.trim().toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/(^-|-$)/g, "");
+    if (!base) base = "item";
+    let id = base;
+    let n = 2;
+    while (PRODUCTS.some((p) => p.id === id)) {
+      id = `${base}-${n}`;
+      n++;
+    }
+    return id;
+  }
+
+  function openAddItemModal() {
+    document.getElementById("new-item-emoji").value = "";
+    document.getElementById("new-item-name").value = "";
+    document.getElementById("new-item-unit").value = "";
+    document.getElementById("new-item-price").value = "";
+    document.getElementById("item-error").textContent = "";
+    document.getElementById("item-modal").classList.add("open");
+    document.getElementById("new-item-name").focus();
+  }
+  function closeAddItemModal() {
+    document.getElementById("item-modal").classList.remove("open");
+  }
+  function submitNewItem() {
+    const emoji = document.getElementById("new-item-emoji").value.trim() || "🍽️";
+    const name = document.getElementById("new-item-name").value.trim();
+    const unit = document.getElementById("new-item-unit").value.trim() || "per kg";
+    const price = parseFloat(document.getElementById("new-item-price").value);
+
+    if (!name) {
+      document.getElementById("item-error").textContent = "Enter an item name.";
+      return;
+    }
+    if (isNaN(price) || price < 0) {
+      document.getElementById("item-error").textContent = "Enter a valid price.";
+      return;
+    }
+    PRODUCTS.push({ id: slugify(name), name, unit, price, emoji, addedAt: nextAddedAt++ });
+    closeAddItemModal();
+    renderGrid();
+    persistProducts();
+    showToast(`${name} added. Use 📷 Photo on its card to add a picture.`);
+  }
+
+  // --- Excel export/restore (manual backup, or moving data to another device) ---
+  function exportToExcel() {
+    const wb = XLSX.utils.book_new();
+
+    const productRows = PRODUCTS.map((p) => ({
+      id: p.id, name: p.name, unit: p.unit, price: p.price, emoji: p.emoji, addedAt: p.addedAt,
+      image: p.image || "",
+    }));
+    const wsProducts = XLSX.utils.json_to_sheet(productRows);
+    XLSX.utils.book_append_sheet(wb, wsProducts, "Products");
+
+    const billRows = [];
+    billHistory.forEach((h) => {
+      h.items.forEach((it) => {
+        billRows.push({
+          "Invoice No": h.no, "Date": h.date, "Time": h.time,
+          "Item": it.name, "Unit": it.unit || "", "Qty": it.qty, "Price": it.price,
+          "Line Total": it.qty * it.price, "Bill Total": h.total,
+        });
+      });
+    });
+    const wsBills = XLSX.utils.json_to_sheet(billRows);
+    XLSX.utils.book_append_sheet(wb, wsBills, "Bill History");
+
+    const wsMeta = XLSX.utils.json_to_sheet([{ invoiceCounter, nextAddedAt, exportedAt: new Date().toISOString() }]);
+    XLSX.utils.book_append_sheet(wb, wsMeta, "Meta");
+
+    const stamp = new Date().toISOString().slice(0, 10);
+    const shopSlug = SHOP_NAME.replace(/\s*FreshMeat Shop\s*$/i, "").trim().replace(/\s+/g, "-");
+    XLSX.writeFile(wb, `${shopSlug ? shopSlug + "-" : ""}FreshMeat-Backup-${stamp}.xlsx`);
+    showToast("Backup downloaded.");
+  }
+
+  function handleRestoreFile(event) {
+    const file = event.target.files[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      try {
+        const data = new Uint8Array(e.target.result);
+        const wb = XLSX.read(data, { type: "array" });
+
+        // --- Peek at Meta sheet first to warn before overwriting anything ---
+        let exportedAt = null;
+        if (wb.SheetNames.includes("Meta")) {
+          const metaRows = XLSX.utils.sheet_to_json(wb.Sheets["Meta"]);
+          if (metaRows[0] && metaRows[0].exportedAt) {
+            exportedAt = new Date(metaRows[0].exportedAt);
+          }
+        }
+
+        let warningMsg = "Restoring this backup will overwrite your current products, bill history, and invoice numbering on this device.";
+        if (exportedAt && !isNaN(exportedAt)) {
+          const daysOld = Math.floor((Date.now() - exportedAt.getTime()) / (1000 * 60 * 60 * 24));
+          const dateStr = exportedAt.toLocaleDateString("en-IN", { day: "2-digit", month: "short", year: "numeric" });
+          if (daysOld <= 0) {
+            warningMsg = `This backup was taken today (${dateStr}). Restoring will overwrite current data on this device.`;
+          } else {
+            warningMsg = `This backup is ${daysOld} day${daysOld > 1 ? "s" : ""} old (from ${dateStr}). Restoring will erase any bills, price changes, or new items added since then — this cannot be undone.`;
+          }
+        }
+
+        if (!confirm(warningMsg + "\n\nContinue with restore?")) {
+          event.target.value = "";
+          return;
+        }
+
+        let productsRestored = false;
+        if (wb.SheetNames.includes("Products")) {
+          const rows = XLSX.utils.sheet_to_json(wb.Sheets["Products"]);
+          if (rows.length) {
+            PRODUCTS.length = 0;
+            rows.forEach((r) => PRODUCTS.push({
+              id: String(r.id), name: String(r.name), unit: String(r.unit),
+              price: Number(r.price) || 0, emoji: String(r.emoji || "🍽️"),
+              addedAt: Number(r.addedAt) || 0,
+              ...(r.image ? { image: String(r.image) } : {}), // never set image: undefined (Firestore rejects it)
+            }));
+            nextAddedAt = Math.max(...PRODUCTS.map((p) => p.addedAt), 0) + 1;
+            productsRestored = true;
+          }
+        }
+
+        if (wb.SheetNames.includes("Bill History")) {
+          const rows = XLSX.utils.sheet_to_json(wb.Sheets["Bill History"]);
+          const grouped = {};
+          rows.forEach((r) => {
+            const no = r["Invoice No"];
+            if (!grouped[no]) {
+              grouped[no] = { no, date: r["Date"], time: r["Time"], total: Number(r["Bill Total"]) || 0, items: [] };
+            }
+            grouped[no].items.push({ name: r["Item"], unit: r["Unit"] || "", qty: Number(r["Qty"]) || 0, price: Number(r["Price"]) || 0 });
+          });
+          billHistory = Object.values(grouped);
+        }
+
+        if (wb.SheetNames.includes("Meta")) {
+          const rows = XLSX.utils.sheet_to_json(wb.Sheets["Meta"]);
+          if (rows[0] && typeof rows[0].invoiceCounter === "number") invoiceCounter = rows[0].invoiceCounter;
+        }
+
+        renderGrid();
+        // Push restored products to Firestore too, so all visitors see them
+        // (persistProducts also calls saveState). Bills are local-only.
+        if (productsRestored) persistProducts(); else saveState();
+        showToast(exportedAt ? `Restored backup from ${exportedAt.toLocaleDateString("en-IN", { day: "2-digit", month: "short" })}.` : "Restored from backup.");
+      } catch (err) {
+        console.error(err);
+        showToast("Couldn't read that file. Is it a FreshMeat backup?");
+      } finally {
+        event.target.value = "";
+      }
+    };
+    reader.readAsArrayBuffer(file);
+  }
+
+  async function loadSharedProducts() {
+    try {
+      const shared = await window.fetchSharedProducts();
+      if (shared && Array.isArray(shared.products) && shared.products.length) {
+        PRODUCTS.length = 0;
+        shared.products.forEach((p) => PRODUCTS.push(p));
+        if (typeof shared.nextAddedAt === "number") nextAddedAt = shared.nextAddedAt;
+      } else {
+        // First time ever for this shop — publish current defaults so Firestore has a doc to read next time.
+        await window.saveSharedProducts(PRODUCTS, nextAddedAt);
+      }
+    } catch (e) {
+      console.warn("Could not load shared prices, showing local defaults:", e);
+    }
+  }
+
+  async function persistProducts() {
+    try {
+      await window.saveSharedProducts(PRODUCTS, nextAddedAt);
+    } catch (e) {
+      console.warn("Could not save shared prices:", e);
+      showToast("Saved locally, but couldn't sync online. Check connection.");
+    }
+    saveState();
+  }
+
+  async function init() {
+    // Wait for the head module script to finish attaching window.fetchSharedProducts
+    let attempts = 0;
+    while (typeof window.fetchSharedProducts !== "function" && attempts < 50) {
+      await new Promise((r) => setTimeout(r, 50));
+      attempts++;
+    }
+    await loadSharedProducts();
+    loadState();
+    renderGrid();
+  }
+
+  init();
+
+  document.getElementById("admin-password-input").addEventListener("keydown", (e) => {
+    if (e.key === "Enter") submitAdminPassword();
+  });
+  document.getElementById("new-item-price").addEventListener("keydown", (e) => {
+    if (e.key === "Enter") submitNewItem();
+  });
+</script>
+
+<div id="print-invoice"></div>
+
+</body>
+</html>
